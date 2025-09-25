@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <title>Simple Chat Test</title>
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+</head>
+
+<body>
+  <h1>Chat Test</h1>
+  <p id="onlineCount">Online: 0</p>
+  <ul id="userList"></ul>
+
+  <!-- Connect -->
+  <div>
+    <input id="token" placeholder="JWT token" size="40" />
+    <button onclick="connect()">Connect</button>
+  </div>
+
+  <!-- Create Room -->
+  <div>
+    <input id="roomName" placeholder="Room name" />
+    <label>
+      <input type="checkbox" id="isPrivate" />
+      Private
+    </label>
+    <button onclick="createRoom()">Create Room</button>
+  </div>
+
+  <!-- Join Room -->
+  <div>
+    <input id="roomId" placeholder="Room ID" />
+    <button onclick="joinRoom()">Join Room</button>
+  </div>
+
+  <!-- Send Message -->
+  <div>
+    <input id="message" placeholder="Message" />
+    <button onclick="sendMessage()">Send</button>
+  </div>
+
+  <pre id="log"></pre>
+
+  <script>
+    let socket;
+
+    function log(msg) {
+      document.getElementById("log").textContent += msg + "\n";
+    }
+
+    function connect() {
+      const token = document.getElementById("token").value;
+      socket = io("http://localhost:3000/chat", { auth: { token } });
+
+      socket.on("connect", () => log("✅ Connected: " + socket.id));
+      socket.on("connected", (d) => log("Username: " + d.username));
+      socket.on("room:joined", (d) => log("🎉 Joined room: " + (d.roomName || d.roomId)));
+      socket.on("room:created", (room) => log("📦 Room created: " + room.name + " (ID: " + room.id + ")"));
+      socket.on("message:new", (msg) => log("📩 " + msg.senderId + ": " + msg.content));
+      socket.on("error", (e) => log("❌ " + e));
+
+      socket.on("presence:global", (data) => {
+        document.getElementById("onlineCount").innerText =
+          "Online: " + (data.count ?? data.users.length);
+
+        const userList = document.getElementById("userList");
+        userList.innerHTML = "";
+        data.users.forEach((u) => {
+          const li = document.createElement("li");
+          li.textContent = u.name;
+          userList.appendChild(li);
+        });
+      });
+
+      socket.emit("presence:global");
+    }
+
+    function createRoom() {
+      const name = document.getElementById("roomName").value;
+      const isPrivate = document.getElementById("isPrivate").checked;
+      socket.emit("room:create", { name, isPrivate });
+      
+    }
+
+    function joinRoom() {
+      const roomId = document.getElementById("roomId").value;
+      socket.emit("room:join", { roomId });
+      socket.on("room:join:error", (e) => log("❌ " + e));
+    }
+
+    function sendMessage() {
+      const roomId = document.getElementById("roomId").value;
+      const content = document.getElementById("message").value;
+      socket.emit("message:send", { roomId, content });
+    }
+  </script>
+</body>
+
+</html>
